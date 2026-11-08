@@ -1,0 +1,118 @@
+CREATE DATABASE smart_parking_db;
+
+USE smart_parking_db;
+
+
+1-> Owners Table
+CREATE TABLE owners (
+    owner_id INT AUTO_INCREMENT PRIMARY KEY,
+    owner_name VARCHAR(100) NOT NULL,
+    phone VARCHAR(15) NOT NULL,
+    email VARCHAR(100) UNIQUE,
+    address VARCHAR(255)
+);
+
+
+2-> Vehicle_Types Table
+CREATE TABLE vehicle_types (
+    type_id INT AUTO_INCREMENT PRIMARY KEY,
+    type_name VARCHAR(50) NOT NULL UNIQUE
+);
+
+3-> Vehicles Table
+CREATE TABLE vehicles (
+    vehicle_id INT AUTO_INCREMENT PRIMARY KEY,
+    owner_id INT NOT NULL,
+    type_id INT NOT NULL,
+    registration_number VARCHAR(20) NOT NULL UNIQUE,
+    model VARCHAR(100),
+
+    FOREIGN KEY (owner_id) REFERENCES owners(owner_id),
+    FOREIGN KEY (type_id) REFERENCES vehicle_types(type_id)
+);
+
+4-> Parking_Areas Table
+CREATE TABLE parking_areas (
+    area_id INT AUTO_INCREMENT PRIMARY KEY,
+    area_name VARCHAR(100) NOT NULL,
+    location VARCHAR(255) NOT NULL
+);
+
+5-> Parking_Slots Table
+CREATE TABLE parking_slots (
+    slot_id INT AUTO_INCREMENT PRIMARY KEY,
+    area_id INT NOT NULL,
+    slot_number VARCHAR(20) NOT NULL,
+    slot_type VARCHAR(50),
+    slot_status VARCHAR(20) DEFAULT 'Available',
+
+    FOREIGN KEY (area_id) REFERENCES parking_areas(area_id),
+    UNIQUE (area_id, slot_number),
+
+    CHECK (slot_status IN ('Available', 'Occupied', 'Maintenance'))
+);
+
+6-> Parking_Rates Table
+CREATE TABLE parking_rates (
+    rate_id INT AUTO_INCREMENT PRIMARY KEY,
+    area_id INT NOT NULL,
+    type_id INT NOT NULL,
+    hourly_rate DECIMAL(10,2) NOT NULL,
+
+    FOREIGN KEY (area_id) REFERENCES parking_areas(area_id),
+    FOREIGN KEY (type_id) REFERENCES vehicle_types(type_id),
+
+    UNIQUE (area_id, type_id),
+    CHECK (hourly_rate >= 0)
+);
+
+7-> Parking_Sessions Table
+CREATE TABLE parking_sessions (
+    session_id INT AUTO_INCREMENT PRIMARY KEY,
+    vehicle_id INT NOT NULL,
+    slot_id INT NOT NULL,
+    entry_time DATETIME NOT NULL,
+    exit_time DATETIME,
+    total_fee DECIMAL(10,2) DEFAULT 0.00,
+    status VARCHAR(20) DEFAULT 'Active',
+
+    FOREIGN KEY (vehicle_id) REFERENCES vehicles(vehicle_id),
+    FOREIGN KEY (slot_id) REFERENCES parking_slots(slot_id),
+
+    CHECK (total_fee >= 0),
+    CHECK (status IN ('Active', 'Completed', 'Cancelled')),
+    CHECK (exit_time IS NULL OR exit_time >= entry_time)
+);
+
+8-> Payments Table
+CREATE TABLE payments (
+    payment_id INT AUTO_INCREMENT PRIMARY KEY,
+    session_id INT NOT NULL,
+    amount DECIMAL(10,2) NOT NULL,
+    payment_method VARCHAR(30),
+    payment_status VARCHAR(20) DEFAULT 'Pending',
+    payment_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (session_id) REFERENCES parking_sessions(session_id),
+
+    CHECK (amount >= 0),
+    CHECK (payment_status IN ('Pending', 'Paid', 'Failed', 'Refunded'))
+);
+
+9-> Violations Table
+CREATE TABLE violations (
+    violation_id INT AUTO_INCREMENT PRIMARY KEY,
+    vehicle_id INT NOT NULL,
+    session_id INT,
+    violation_type VARCHAR(100) NOT NULL,
+    fine_amount DECIMAL(10,2) NOT NULL,
+    status VARCHAR(20) DEFAULT 'Unpaid',
+    issued_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (vehicle_id) REFERENCES vehicles(vehicle_id),
+    FOREIGN KEY (session_id) REFERENCES parking_sessions(session_id),
+
+    CHECK (fine_amount >= 0),
+    CHECK (status IN ('Unpaid', 'Paid', 'Disputed'))
+);
+
