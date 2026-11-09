@@ -1,0 +1,446 @@
+USE smart_parking;
+
+-- =========================================================
+-- MEDIUM AND HARD MYSQL QUERIES
+-- Q1 - Q40
+-- Project: Smart Parking & Vehicle Management System
+-- MySQL 8.0+
+-- =========================================================
+
+
+-- =========================================================
+-- 1. JOINS (MEDIUM)
+-- =========================================================
+
+-- Q1. Display each vehicle with its owner name and vehicle type.
+SELECT v.vehicle_id, v.registration_number, v.model,
+       o.owner_name, vt.type_name
+FROM vehicles v
+JOIN owners o ON v.owner_id = o.owner_id
+JOIN vehicle_types vt ON v.type_id = vt.type_id;
+
+
+-- Q2. Display parking slots with their parking area names.
+SELECT ps.slot_id, ps.slot_number, ps.slot_type, ps.slot_status,
+       pa.area_name, pa.location
+FROM parking_slots ps
+JOIN parking_areas pa ON ps.area_id = pa.area_id;
+
+
+-- Q3. Display parking sessions with vehicle registration,
+-- slot number, and parking area.
+SELECT s.session_id, v.registration_number, ps.slot_number,
+       pa.area_name, s.entry_time, s.exit_time, s.status
+FROM parking_sessions s
+JOIN vehicles v ON s.vehicle_id = v.vehicle_id
+JOIN parking_slots ps ON s.slot_id = ps.slot_id
+JOIN parking_areas pa ON ps.area_id = pa.area_id;
+
+
+-- Q4. Display payment details with session and vehicle information.
+SELECT p.payment_id, p.amount, p.payment_method, p.payment_status,
+       s.session_id, v.registration_number
+FROM payments p
+JOIN parking_sessions s ON p.session_id = s.session_id
+JOIN vehicles v ON s.vehicle_id = v.vehicle_id;
+
+
+-- Q5. Display all owners and their vehicles,
+-- including owners who have not registered a vehicle.
+SELECT o.owner_id, o.owner_name, v.registration_number, v.model
+FROM owners o
+LEFT JOIN vehicles v ON o.owner_id = v.owner_id;
+
+
+-- Q6. Display all parking areas and their slots,
+-- including areas that have no slots.
+SELECT pa.area_id, pa.area_name, ps.slot_id, ps.slot_number,
+       ps.slot_status
+FROM parking_areas pa
+LEFT JOIN parking_slots ps ON pa.area_id = ps.area_id;
+
+
+-- Q7. Display vehicles and their violations,
+-- including vehicles without recorded violations.
+SELECT v.registration_number, v.model,
+       vl.violation_id, vl.violation_type,
+       vl.fine_amount, vl.status
+FROM vehicles v
+LEFT JOIN violations vl ON v.vehicle_id = vl.vehicle_id;
+
+
+-- Q8. Display parking sessions with payment details,
+-- including sessions that do not have a payment record.
+SELECT s.session_id, v.registration_number, s.total_fee,
+       p.payment_id, p.amount, p.payment_status
+FROM parking_sessions s
+JOIN vehicles v ON s.vehicle_id = v.vehicle_id
+LEFT JOIN payments p ON s.session_id = p.session_id;
+
+
+-- =========================================================
+-- 2. GROUP BY, AGGREGATE FUNCTIONS AND HAVING (MEDIUM)
+-- =========================================================
+
+-- Q9. Count the number of vehicles owned by each owner.
+SELECT o.owner_id, o.owner_name,
+       COUNT(v.vehicle_id) AS vehicle_count
+FROM owners o
+LEFT JOIN vehicles v ON o.owner_id = v.owner_id
+GROUP BY o.owner_id, o.owner_name;
+
+
+-- Q10. Count the number of parking slots in each area.
+SELECT pa.area_id, pa.area_name,
+       COUNT(ps.slot_id) AS total_slots
+FROM parking_areas pa
+LEFT JOIN parking_slots ps ON pa.area_id = ps.area_id
+GROUP BY pa.area_id, pa.area_name;
+
+
+-- Q11. Count available, occupied, and maintenance slots
+-- in each parking area.
+SELECT pa.area_name, ps.slot_status,
+       COUNT(*) AS slot_count
+FROM parking_areas pa
+JOIN parking_slots ps ON pa.area_id = ps.area_id
+GROUP BY pa.area_name, ps.slot_status
+ORDER BY pa.area_name, ps.slot_status;
+
+
+-- Q12. Calculate total payment amount collected
+-- for each payment method.
+SELECT payment_method,
+       SUM(amount) AS total_collected
+FROM payments
+WHERE payment_status = 'Paid'
+GROUP BY payment_method;
+
+
+-- Q13. Display parking areas having more than 5 slots.
+SELECT pa.area_name, COUNT(ps.slot_id) AS total_slots
+FROM parking_areas pa
+JOIN parking_slots ps ON pa.area_id = ps.area_id
+GROUP BY pa.area_id, pa.area_name
+HAVING COUNT(ps.slot_id) > 5;
+
+
+-- Q14. Display owners who have registered more than 2 vehicles.
+SELECT o.owner_id, o.owner_name,
+       COUNT(v.vehicle_id) AS vehicle_count
+FROM owners o
+JOIN vehicles v ON o.owner_id = v.owner_id
+GROUP BY o.owner_id, o.owner_name
+HAVING COUNT(v.vehicle_id) > 2;
+
+
+-- Q15. Calculate total revenue collected from parking sessions.
+SELECT SUM(amount) AS total_revenue
+FROM payments
+WHERE payment_status = 'Paid';
+
+
+-- Q16. Display the average parking fee for each parking area.
+SELECT pa.area_name,
+       AVG(s.total_fee) AS average_parking_fee
+FROM parking_areas pa
+JOIN parking_slots ps ON pa.area_id = ps.area_id
+JOIN parking_sessions s ON ps.slot_id = s.slot_id
+GROUP BY pa.area_id, pa.area_name;
+
+
+-- =========================================================
+-- 3. SUBQUERIES (MEDIUM TO HARD)
+-- =========================================================
+
+-- Q17. Display vehicles whose parking fee is greater
+-- than the average parking fee.
+SELECT v.registration_number, s.total_fee
+FROM vehicles v
+JOIN parking_sessions s ON v.vehicle_id = s.vehicle_id
+WHERE s.total_fee > (
+    SELECT AVG(total_fee)
+    FROM parking_sessions
+);
+
+
+-- Q18. Display owners who have registered at least one vehicle.
+SELECT owner_id, owner_name
+FROM owners
+WHERE owner_id IN (
+    SELECT owner_id
+    FROM vehicles
+);
+
+
+-- Q19. Display vehicles that have never used a parking slot.
+SELECT vehicle_id, registration_number, model
+FROM vehicles
+WHERE vehicle_id NOT IN (
+    SELECT vehicle_id
+    FROM parking_sessions
+);
+
+
+-- Q20. Display parking areas having more slots
+-- than the average number of slots per area.
+SELECT pa.area_id, pa.area_name,
+       COUNT(ps.slot_id) AS total_slots
+FROM parking_areas pa
+LEFT JOIN parking_slots ps ON pa.area_id = ps.area_id
+GROUP BY pa.area_id, pa.area_name
+HAVING COUNT(ps.slot_id) > (
+    SELECT AVG(slot_count)
+    FROM (
+        SELECT COUNT(slot_id) AS slot_count
+        FROM parking_slots
+        GROUP BY area_id
+    ) AS area_slot_counts
+);
+
+
+-- Q21. Display the vehicle with the highest total parking fee.
+SELECT v.vehicle_id, v.registration_number,
+       SUM(s.total_fee) AS total_fee
+FROM vehicles v
+JOIN parking_sessions s ON v.vehicle_id = s.vehicle_id
+GROUP BY v.vehicle_id, v.registration_number
+HAVING SUM(s.total_fee) = (
+    SELECT MAX(vehicle_total)
+    FROM (
+        SELECT SUM(total_fee) AS vehicle_total
+        FROM parking_sessions
+        GROUP BY vehicle_id
+    ) AS vehicle_totals
+);
+
+
+-- Q22. Display owners who have not made any payment
+-- for their vehicles' parking sessions.
+SELECT o.owner_id, o.owner_name
+FROM owners o
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM vehicles v
+    JOIN parking_sessions s ON v.vehicle_id = s.vehicle_id
+    JOIN payments p ON s.session_id = p.session_id
+    WHERE v.owner_id = o.owner_id
+);
+
+
+-- Q23. Display parking sessions whose fee is greater
+-- than the average fee of sessions in the same parking area.
+SELECT s.session_id, s.total_fee, pa.area_name
+FROM parking_sessions s
+JOIN parking_slots ps ON s.slot_id = ps.slot_id
+JOIN parking_areas pa ON ps.area_id = pa.area_id
+WHERE s.total_fee > (
+    SELECT AVG(s2.total_fee)
+    FROM parking_sessions s2
+    JOIN parking_slots ps2 ON s2.slot_id = ps2.slot_id
+    WHERE ps2.area_id = ps.area_id
+);
+
+
+-- Q24. Display vehicle types whose hourly rate is
+-- greater than the overall average hourly rate.
+SELECT DISTINCT vt.type_id, vt.type_name
+FROM vehicle_types vt
+JOIN parking_rates pr ON vt.type_id = pr.type_id
+WHERE pr.hourly_rate > (
+    SELECT AVG(hourly_rate)
+    FROM parking_rates
+);
+
+
+-- =========================================================
+-- 4. DATE FUNCTIONS AND CASE (MEDIUM)
+-- =========================================================
+
+-- Q25. Display parking sessions that lasted more than 3 hours.
+SELECT session_id, vehicle_id, entry_time, exit_time,
+       TIMESTAMPDIFF(HOUR, entry_time, exit_time) AS duration_hours
+FROM parking_sessions
+WHERE exit_time IS NOT NULL
+AND TIMESTAMPDIFF(HOUR, entry_time, exit_time) > 3;
+
+
+-- Q26. Display parking sessions started during the current month.
+SELECT session_id, vehicle_id, entry_time, total_fee
+FROM parking_sessions
+WHERE MONTH(entry_time) = MONTH(CURRENT_DATE())
+AND YEAR(entry_time) = YEAR(CURRENT_DATE());
+
+
+-- Q27. Display parking sessions with their duration in minutes.
+SELECT session_id, vehicle_id, entry_time, exit_time,
+       TIMESTAMPDIFF(MINUTE, entry_time, exit_time) AS duration_minutes
+FROM parking_sessions
+WHERE exit_time IS NOT NULL;
+
+
+-- Q28. Display parking sessions and classify their fee.
+SELECT session_id, total_fee,
+       CASE
+           WHEN total_fee < 100 THEN 'Low Fee'
+           WHEN total_fee BETWEEN 100 AND 500 THEN 'Medium Fee'
+           ELSE 'High Fee'
+       END AS fee_category
+FROM parking_sessions;
+
+
+-- Q29. Display payments and classify their payment status.
+SELECT payment_id, amount, payment_status,
+       CASE
+           WHEN payment_status = 'Paid' THEN 'Completed'
+           WHEN payment_status = 'Pending' THEN 'Waiting'
+           ELSE 'Unsuccessful'
+       END AS payment_category
+FROM payments;
+
+
+-- Q30. Display parking slots and classify their availability.
+SELECT slot_id, slot_number, slot_status,
+       CASE
+           WHEN slot_status = 'Available' THEN 'Can Park'
+           WHEN slot_status = 'Occupied' THEN 'Currently Used'
+           ELSE 'Unavailable'
+       END AS availability
+FROM parking_slots;
+
+
+-- =========================================================
+-- 5. HARD QUERIES: CTEs AND WINDOW FUNCTIONS
+-- MySQL 8.0+
+-- =========================================================
+
+-- Q31. Rank vehicles based on their total parking fee.
+WITH vehicle_revenue AS (
+    SELECT v.vehicle_id, v.registration_number,
+           SUM(s.total_fee) AS total_fee
+    FROM vehicles v
+    JOIN parking_sessions s ON v.vehicle_id = s.vehicle_id
+    GROUP BY v.vehicle_id, v.registration_number
+)
+SELECT vehicle_id, registration_number, total_fee,
+       RANK() OVER (ORDER BY total_fee DESC) AS vehicle_rank
+FROM vehicle_revenue;
+
+
+-- Q32. Display the top 3 owners based on number of vehicles.
+WITH owner_vehicle_count AS (
+    SELECT o.owner_id, o.owner_name,
+           COUNT(v.vehicle_id) AS vehicle_count
+    FROM owners o
+    LEFT JOIN vehicles v ON o.owner_id = v.owner_id
+    GROUP BY o.owner_id, o.owner_name
+)
+SELECT owner_id, owner_name, vehicle_count
+FROM owner_vehicle_count
+ORDER BY vehicle_count DESC
+LIMIT 3;
+
+
+-- Q33. Calculate running total of payments ordered by payment date.
+SELECT payment_id, amount, payment_date,
+       SUM(amount) OVER (
+           ORDER BY payment_date, payment_id
+       ) AS running_total
+FROM payments
+WHERE payment_status = 'Paid';
+
+
+-- Q34. Display each parking session with the previous session's fee
+-- for the same vehicle.
+SELECT session_id, vehicle_id, entry_time, total_fee,
+       LAG(total_fee) OVER (
+           PARTITION BY vehicle_id
+           ORDER BY entry_time
+       ) AS previous_session_fee
+FROM parking_sessions;
+
+
+-- Q35. Display each vehicle's total parking fee
+-- and its rank among vehicles belonging to the same owner.
+WITH vehicle_fee AS (
+    SELECT v.vehicle_id, v.owner_id, v.registration_number,
+           SUM(s.total_fee) AS total_fee
+    FROM vehicles v
+    JOIN parking_sessions s ON v.vehicle_id = s.vehicle_id
+    GROUP BY v.vehicle_id, v.owner_id, v.registration_number
+)
+SELECT vehicle_id, owner_id, registration_number, total_fee,
+       DENSE_RANK() OVER (
+           PARTITION BY owner_id
+           ORDER BY total_fee DESC
+       ) AS owner_vehicle_rank
+FROM vehicle_fee;
+
+
+-- =========================================================
+-- 6. HARD QUERIES: ADVANCED REPORTS
+-- =========================================================
+
+-- Q36. Display each parking area's revenue and rank areas
+-- based on revenue collected.
+WITH area_revenue AS (
+    SELECT pa.area_id, pa.area_name,
+           SUM(p.amount) AS revenue
+    FROM parking_areas pa
+    JOIN parking_slots ps ON pa.area_id = ps.area_id
+    JOIN parking_sessions s ON ps.slot_id = s.slot_id
+    JOIN payments p ON s.session_id = p.session_id
+    WHERE p.payment_status = 'Paid'
+    GROUP BY pa.area_id, pa.area_name
+)
+SELECT area_id, area_name, revenue,
+       RANK() OVER (ORDER BY revenue DESC) AS revenue_rank
+FROM area_revenue;
+
+
+-- Q37. Display owners and their total amount paid
+-- for parking sessions.
+SELECT o.owner_id, o.owner_name,
+       SUM(p.amount) AS total_amount_paid
+FROM owners o
+JOIN vehicles v ON o.owner_id = v.owner_id
+JOIN parking_sessions s ON v.vehicle_id = s.vehicle_id
+JOIN payments p ON s.session_id = p.session_id
+WHERE p.payment_status = 'Paid'
+GROUP BY o.owner_id, o.owner_name
+ORDER BY total_amount_paid DESC;
+
+
+-- Q38. Display vehicles with more than 3 parking sessions.
+SELECT v.vehicle_id, v.registration_number,
+       COUNT(s.session_id) AS session_count
+FROM vehicles v
+JOIN parking_sessions s ON v.vehicle_id = s.vehicle_id
+GROUP BY v.vehicle_id, v.registration_number
+HAVING COUNT(s.session_id) > 3;
+
+
+-- Q39. Display unpaid parking sessions and their owners.
+SELECT o.owner_name, v.registration_number,
+       s.session_id, s.total_fee,
+       p.payment_status
+FROM owners o
+JOIN vehicles v ON o.owner_id = v.owner_id
+JOIN parking_sessions s ON v.vehicle_id = s.vehicle_id
+JOIN payments p ON s.session_id = p.session_id
+WHERE p.payment_status <> 'Paid';
+
+
+-- Q40. Display vehicles that have parking sessions
+-- in every parking area.
+SELECT v.vehicle_id, v.registration_number
+FROM vehicles v
+WHERE (
+    SELECT COUNT(DISTINCT ps.area_id)
+    FROM parking_sessions s
+    JOIN parking_slots ps ON s.slot_id = ps.slot_id
+    WHERE s.vehicle_id = v.vehicle_id
+) = (
+    SELECT COUNT(*)
+    FROM parking_areas
+);
